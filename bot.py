@@ -38,29 +38,28 @@ dp = Dispatcher()
 user_daily_log = {}
 users = set()
 
-PRICE = 80  # начальная цена
+PRICE = 80  # стартовая цена
 ADMIN_ID = 8482392419
 
 
-# --- Старт ---
+# --- СТАРТ ---
 @dp.message(F.text == "/start")
 async def start(message: Message):
     users.add(message.from_user.id)
-
     await message.answer(
         "👋 Привет!\n\n"
-        "✂️ Напиши, сколько изделий ты изготовила сегодня.\n\n"
+        "✂️ Напиши, сколько изделий ты изготовила сегодня.\n"
         "Пример: 25"
     )
 
 
-# --- Узнать свой ID ---
+# --- ID ---
 @dp.message(F.text == "/id")
 async def get_id(message: Message):
     await message.answer(f"Твой ID: {message.from_user.id}")
 
 
-# --- Запись ---
+# --- ЗАПИСЬ ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def save_data(message: Message):
     if not message.text.isdigit():
@@ -91,7 +90,9 @@ async def save_data(message: Message):
         f"✅ Принято: {count}\n💰 ЗП: {salary} ₽"
     )
 
-    asyncio.create_task(write_to_sheet(today, name, username, user_id, count, salary))
+    asyncio.create_task(
+        write_to_sheet(today, name, username, user_id, count, salary)
+    )
 
 
 async def write_to_sheet(date, name, username, user_id, count, salary):
@@ -121,7 +122,41 @@ async def set_price(message: Message):
     await message.answer(f"✅ Новая цена: {PRICE} ₽")
 
 
-# --- МЕСЯЦ ---
+# --- МОЙ МЕСЯЦ ---
+@dp.message(F.text == "/month")
+async def my_month(message: Message):
+    user_id = str(message.from_user.id)
+    now = datetime.now()
+
+    data = sheet.get_all_records()
+
+    total_count = 0
+    total_salary = 0
+
+    for row in data:
+        try:
+            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
+
+            if (
+                str(row["UserID"]) == user_id and
+                row_date.month == now.month and
+                row_date.year == now.year
+            ):
+                count = int(row["Кол-во"])
+                total_count += count
+                total_salary += count * PRICE
+
+        except:
+            continue
+
+    await message.answer(
+        f"💰 За месяц:\n\n"
+        f"Изделий: {total_count}\n"
+        f"ЗП: {total_salary} ₽"
+    )
+
+
+# --- ОБЩИЙ ОТЧЁТ ---
 @dp.message(F.text == "/total")
 async def total_month(message: Message):
     now = datetime.now()
@@ -138,7 +173,7 @@ async def total_month(message: Message):
                 name = row["Имя"]
                 count = int(row["Кол-во"])
 
-                salary = count * PRICE  # считаем заново
+                salary = count * PRICE
 
                 stats[name] = stats.get(name, 0) + salary
                 total_sum += salary
@@ -156,40 +191,7 @@ async def total_month(message: Message):
     await message.answer(text)
 
 
-# --- ОБЩИЙ ОТЧЁТ ---
-@dp.message(F.text == "/total")
-async def total_month(message: Message):
-    now = datetime.now()
-    data = sheet.get_all_records()
-
-    stats = {}
-
-    for row in data:
-        try:
-            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
-
-            if row_date.month == now.month and row_date.year == now.year:
-                name = row["Имя"]
-                salary = int(row["ЗП"])
-
-                stats[name] = stats.get(name, 0) + salary
-
-        except:
-            continue
-
-    text = "📊 Выплаты за месяц:\n\n"
-    total_sum = 0
-
-    for name, money in stats.items():
-        text += f"{name} — {money} ₽\n"
-        total_sum += money
-
-    text += f"\nИТОГО: {total_sum} ₽"
-
-    await message.answer(text)
-
-
-# --- Напоминание ---
+# --- НАПОМИНАНИЕ ---
 async def wait_until(target_time: time):
     while True:
         now = datetime.now()
@@ -213,7 +215,7 @@ async def reminder_loop():
                 pass
 
 
-# --- Запуск ---
+# --- ЗАПУСК ---
 async def main():
     print("Бот запущен 🚀")
     asyncio.create_task(reminder_loop())
