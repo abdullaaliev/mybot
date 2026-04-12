@@ -39,6 +39,7 @@ user_daily_log = {}
 users = set()
 
 
+# --- Старт ---
 @dp.message(F.text == "/start")
 async def start(message: Message):
     users.add(message.from_user.id)
@@ -48,55 +49,9 @@ async def start(message: Message):
         "✂️ Напиши, сколько изделий ты изготовила сегодня.\n\n"
         "Пример: 25"
     )
-    
-@dp.message(F.text == "/month")
-async def my_month(message: Message):
-    user_name = message.from_user.full_name
-    current_month = datetime.now().strftime("%m.%Y")
-
-    data = sheet.get_all_records()
-
-    total_count = 0
-    total_salary = 0
-
-    for row in data:
-        if user_name == row["Имя"] and current_month in row["Дата"]:
-            total_count += int(row["Кол-во"])
-            total_salary += int(row["ЗП"])
-
-    await message.answer(
-        f"💰 За месяц:\n\n"
-        f"Изделий: {total_count}\n"
-        f"ЗП: {total_salary} ₽"
-    )
-    
-@dp.message(F.text == "/total")
-async def total_month(message: Message):
-    data = sheet.get_all_records()
-
-    current_month = datetime.now().strftime("%m.%Y")
-
-    stats = {}
-
-    for row in data:
-        if current_month in row["Дата"]:
-            name = row["Имя"]
-            salary = int(row["ЗП"])
-
-            stats[name] = stats.get(name, 0) + salary
-
-    text = "📊 Выплаты за месяц:\n\n"
-    total_sum = 0
-
-    for name, money in stats.items():
-        text += f"{name} — {money} ₽\n"
-        total_sum += money
-
-    text += f"\nИТОГО: {total_sum} ₽"
-
-    await message.answer(text)
 
 
+# --- Запись ---
 @dp.message(F.text)
 async def save_data(message: Message):
     if not message.text.isdigit():
@@ -137,6 +92,73 @@ async def write_to_sheet(date, name, username, count, salary):
     )
 
 
+# --- ЗАРПЛАТА ЗА МЕСЯЦ (исправлено) ---
+@dp.message(F.text == "/month")
+async def my_month(message: Message):
+    user_name = message.from_user.full_name
+    now = datetime.now()
+
+    data = sheet.get_all_records()
+
+    total_count = 0
+    total_salary = 0
+
+    for row in data:
+        try:
+            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
+
+            if (
+                row["Имя"] == user_name and
+                row_date.month == now.month and
+                row_date.year == now.year
+            ):
+                total_count += int(row["Кол-во"])
+                total_salary += int(row["ЗП"])
+
+        except:
+            continue
+
+    await message.answer(
+        f"💰 За месяц:\n\n"
+        f"Изделий: {total_count}\n"
+        f"ЗП: {total_salary} ₽"
+    )
+
+
+# --- ОБЩИЙ ОТЧЁТ ---
+@dp.message(F.text == "/total")
+async def total_month(message: Message):
+    now = datetime.now()
+    data = sheet.get_all_records()
+
+    stats = {}
+
+    for row in data:
+        try:
+            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
+
+            if row_date.month == now.month and row_date.year == now.year:
+                name = row["Имя"]
+                salary = int(row["ЗП"])
+
+                stats[name] = stats.get(name, 0) + salary
+
+        except:
+            continue
+
+    text = "📊 Выплаты за месяц:\n\n"
+    total_sum = 0
+
+    for name, money in stats.items():
+        text += f"{name} — {money} ₽\n"
+        total_sum += money
+
+    text += f"\nИТОГО: {total_sum} ₽"
+
+    await message.answer(text)
+
+
+# --- Напоминание ---
 async def wait_until(target_time: time):
     while True:
         now = datetime.now()
@@ -160,6 +182,7 @@ async def reminder_loop():
                 pass
 
 
+# --- Запуск ---
 async def main():
     print("Бот запущен 🚀")
     asyncio.create_task(reminder_loop())
