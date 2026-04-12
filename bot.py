@@ -92,7 +92,7 @@ async def save_data(message: Message):
     salary = count * PRICE
 
     await message.answer(
-        f"✅ Принято: {count}\n💰 ЗП: {salary} ₽"
+        f"✅ Принято: {count}\n���� ЗП: {salary} ₽"
     )
 
     asyncio.create_task(
@@ -181,7 +181,7 @@ async def total_month(message: Message):
     try:
         data = await asyncio.to_thread(sheet.get_all_records)
     except Exception as e:
-        await message.answer(f"❌ Оши��ка при чтении данных: {e}")
+        await message.answer(f"❌ Ошибка при чтении данных: {e}")
         return
 
     stats: Dict[str, int] = {}
@@ -203,7 +203,7 @@ async def total_month(message: Message):
             continue
 
     if not stats:
-        await message.answer("📊 Нет данных за текущий месяц")
+        await message.answer("📊 Нет данн��х за текущий месяц")
         return
 
     text = "📊 Выплаты за месяц:\n\n"
@@ -232,11 +232,9 @@ async def top_week(message: Message):
         try:
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
-            # Проверка: дата в диапазоне последних 7 дней
             if week_ago <= row_date <= now:
                 name = row["Имя"]
                 count = int(row["Кол-во"])
-
                 stats[name] = stats.get(name, 0) + count
 
         except (ValueError, KeyError):
@@ -246,45 +244,15 @@ async def top_week(message: Message):
         await message.answer("📊 Нет данных за последнюю неделю")
         return
 
-    # Сортируем по количеству штук (по убыванию) и берём топ 10
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
     top_10 = sorted_stats[:10]
 
     text = "🏆 ТОП за неделю:\n\n"
-
     medals = ["🥇", "🥈", "🥉"]
 
     for idx, (name, count) in enumerate(top_10, 1):
         medal = medals[idx - 1] if idx <= 3 else f"{idx}."
         text += f"{medal} {name} — {count} шт.\n"
-
-    await message.answer(text)
-
-    # Сортируем по количеству штук (по убыванию) и берём топ 10
-    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
-    top_10 = sorted_stats[:10]
-
-    text = "🏆 ТОП за неделю:\n\n"
-
-    medals = ["🥇", "🥈", "🥉"]
-
-    for idx, (name, count) in enumerate(top_10, 1):
-        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
-        text += f"{medal} {name} — {count} шт.\n"
-
-    await message.answer(text)
-
-    # Сортируем по сумме (по убыванию) и берём топ 10
-    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
-    top_10 = sorted_stats[:10]
-
-    text = "🏆 ТОП за неделю:\n\n"
-
-    medals = ["🥇", "🥈", "🥉"]
-
-    for idx, (name, money) in enumerate(top_10, 1):
-        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
-        text += f"{medal} {name} — {money} ₽\n"
 
     await message.answer(text)
 
@@ -311,7 +279,7 @@ async def reminder_loop():
 
         for user_id in users:
             try:
-                await bot.send_message(user_id, "⏰ ��дайте отчёт за сегодня")
+                await bot.send_message(user_id, "⏰ Сдайте отчёт за сегодня")
             except Exception as e:
                 print(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
 
