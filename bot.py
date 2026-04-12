@@ -17,7 +17,12 @@ scope = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-creds_dict = json.loads(os.getenv("GOOGLE_CREDS"))
+creds_raw = os.getenv("GOOGLE_CREDS")
+
+if creds_raw is None:
+    raise ValueError("GOOGLE_CREDS не найден")
+
+creds_dict = json.loads(creds_raw)
 
 creds = ServiceAccountCredentials.from_json_keyfile_dict(
     creds_dict, scope
