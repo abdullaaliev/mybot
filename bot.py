@@ -1,7 +1,7 @@
 import asyncio
 import os
 import json
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Dict, Set
 
 from aiogram import Bot, Dispatcher, F
@@ -181,7 +181,7 @@ async def total_month(message: Message):
     try:
         data = await asyncio.to_thread(sheet.get_all_records)
     except Exception as e:
-        await message.answer(f"❌ Ошибка при чтении данных: {e}")
+        await message.answer(f"❌ Оши��ка при чтении данных: {e}")
         return
 
     stats: Dict[str, int] = {}
@@ -214,6 +214,54 @@ async def total_month(message: Message):
     await message.answer(text)
 
 
+# --- ТАБЛИЦА ЛИДЕРОВ ЗА НЕДЕЛЮ ---
+@dp.message(F.text == "/top")
+async def top_week(message: Message):
+    now = datetime.now()
+    week_ago = now - timedelta(days=7)
+
+    try:
+        data = await asyncio.to_thread(sheet.get_all_records)
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при чтении данных: {e}")
+        return
+
+    stats: Dict[str, int] = {}
+
+    for row in data:
+        try:
+            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
+
+            # Проверка: дата в диапазоне последних 7 дней
+            if week_ago <= row_date <= now:
+                name = row["Имя"]
+                count = int(row["Кол-во"])
+                salary = count * PRICE
+
+                stats[name] = stats.get(name, 0) + salary
+
+        except (ValueError, KeyError):
+            continue
+
+    if not stats:
+        await message.answer("📊 Нет данных за последнюю неделю")
+        return
+
+    # Сортируем по сумме (по убыванию) и берём топ 10
+    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
+    top_10 = sorted_stats[:10]
+
+    text = "🏆 ТОП за неделю:\n\n"
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for idx, (name, money) in enumerate(top_10, 1):
+        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
+        text += f"{medal} {name} — {money} ₽\n"
+
+    await message.answer(text)
+
+
 # --- НАПОМИНАНИЕ ---
 async def wait_until(target_time: time) -> None:
     """Ожидает наступления определённого времени суток"""
@@ -236,7 +284,7 @@ async def reminder_loop():
 
         for user_id in users:
             try:
-                await bot.send_message(user_id, "⏰ Сдайте отчёт за сегодня")
+                await bot.send_message(user_id, "⏰ ��дайте отчёт за сегодня")
             except Exception as e:
                 print(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
 
