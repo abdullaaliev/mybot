@@ -38,6 +38,9 @@ dp = Dispatcher()
 user_daily_log = {}
 users = set()
 
+PRICE = 80  # начальная цена
+ADMIN_ID = 123456789  # ⚠️ ЗАМЕНИ НА СВОЙ ID
+
 
 # --- Старт ---
 @dp.message(F.text == "/start")
@@ -51,7 +54,13 @@ async def start(message: Message):
     )
 
 
-# --- Запись данных ---
+# --- Узнать свой ID ---
+@dp.message(F.text == "/id")
+async def get_id(message: Message):
+    await message.answer(f"Твой ID: {message.from_user.id}")
+
+
+# --- Запись ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def save_data(message: Message):
     if not message.text.isdigit():
@@ -76,31 +85,47 @@ async def save_data(message: Message):
         "count": count
     }
 
-    salary = count * 70
+    salary = count * PRICE
 
     await message.answer(
         f"✅ Принято: {count}\n💰 ЗП: {salary} ₽"
     )
 
-    asyncio.create_task(write_to_sheet(today, name, username, count, salary))
+    asyncio.create_task(write_to_sheet(today, name, username, user_id, count, salary))
 
 
-async def write_to_sheet(date, name, username, count, salary):
+async def write_to_sheet(date, name, username, user_id, count, salary):
     await asyncio.to_thread(
         sheet.append_row,
-        [date, name, username, count, salary]
+        [date, name, username, user_id, count, salary]
     )
 
 
-# --- МЕСЯЦ (исправлено через username) ---
+# --- СМЕНА ЦЕНЫ ---
+@dp.message(F.text.startswith("/setprice"))
+async def set_price(message: Message):
+    global PRICE
+
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Нет доступа")
+        return
+
+    parts = message.text.split()
+
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("❌ Используй: /setprice 80")
+        return
+
+    PRICE = int(parts[1])
+
+    await message.answer(f"✅ Новая цена: {PRICE} ₽")
+
+
+# --- МЕСЯЦ ---
 @dp.message(F.text == "/month")
 async def my_month(message: Message):
-    username = message.from_user.username
+    user_id = str(message.from_user.id)
     now = datetime.now()
-
-    if username is None:
-        await message.answer("❗ У тебя нет username в Telegram")
-        return
 
     data = sheet.get_all_records()
 
@@ -112,7 +137,7 @@ async def my_month(message: Message):
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
             if (
-                row["Username"] == username and
+                str(row["UserID"]) == user_id and
                 row_date.month == now.month and
                 row_date.year == now.year
             ):
