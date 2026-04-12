@@ -52,7 +52,7 @@ async def start(message: Message):
 
 
 # --- Запись ---
-@dp.message(F.text)
+@dp.message(F.text & ~F.text.startswith("/"))
 async def save_data(message: Message):
     if not message.text.isdigit():
         await message.answer("❌ Пиши только число")
