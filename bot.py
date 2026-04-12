@@ -92,7 +92,7 @@ async def save_data(message: Message):
     salary = count * PRICE
 
     await message.answer(
-        f"✅ Принято: {count}\n���� ЗП: {salary} ₽"
+        f"✅ Принято: {count}\n💰 ЗП: {salary} ₽"
     )
 
     asyncio.create_task(
@@ -203,7 +203,7 @@ async def total_month(message: Message):
             continue
 
     if not stats:
-        await message.answer("📊 Нет данн��х за текущий месяц")
+        await message.answer("📊 Нет данных за текущий месяц")
         return
 
     text = "📊 Выплаты за месяц:\n\n"
