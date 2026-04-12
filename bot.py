@@ -51,7 +51,7 @@ async def start(message: Message):
     )
 
 
-# --- Запись ---
+# --- Запись данных ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def save_data(message: Message):
     if not message.text.isdigit():
@@ -92,21 +92,15 @@ async def write_to_sheet(date, name, username, count, salary):
     )
 
 
-# --- ЗАРПЛАТА ЗА МЕСЯЦ (исправлено) ---
+# --- МЕСЯЦ (исправлено через username) ---
 @dp.message(F.text == "/month")
-async def my_month(message: Message):
-    user_name = message.from_user.full_name
-    now = datetime.now()
-
-    data = sheet.get_all_records()
-
-    total_count = 0
-    total_salary = 0
-
-   @dp.message(F.text == "/month")
 async def my_month(message: Message):
     username = message.from_user.username
     now = datetime.now()
+
+    if username is None:
+        await message.answer("❗ У тебя нет username в Telegram")
+        return
 
     data = sheet.get_all_records()
 
@@ -133,6 +127,7 @@ async def my_month(message: Message):
         f"Изделий: {total_count}\n"
         f"ЗП: {total_salary} ₽"
     )
+
 
 # --- ОБЩИЙ ОТЧЁТ ---
 @dp.message(F.text == "/total")
