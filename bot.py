@@ -236,9 +236,8 @@ async def top_week(message: Message):
             if week_ago <= row_date <= now:
                 name = row["Имя"]
                 count = int(row["Кол-во"])
-                salary = count * PRICE
 
-                stats[name] = stats.get(name, 0) + salary
+                stats[name] = stats.get(name, 0) + count
 
         except (ValueError, KeyError):
             continue
@@ -246,6 +245,20 @@ async def top_week(message: Message):
     if not stats:
         await message.answer("📊 Нет данных за последнюю неделю")
         return
+
+    # Сортируем по количеству штук (по убыванию) и берём топ 10
+    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
+    top_10 = sorted_stats[:10]
+
+    text = "🏆 ТОП за неделю:\n\n"
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for idx, (name, count) in enumerate(top_10, 1):
+        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
+        text += f"{medal} {name} — {count} шт.\n"
+
+    await message.answer(text)
 
     # Сортируем по сумме (по убыванию) и берём топ 10
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
