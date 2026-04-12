@@ -122,36 +122,38 @@ async def set_price(message: Message):
 
 
 # --- МЕСЯЦ ---
-@dp.message(F.text == "/month")
-async def my_month(message: Message):
-    user_id = str(message.from_user.id)
+@dp.message(F.text == "/total")
+async def total_month(message: Message):
     now = datetime.now()
-
     data = sheet.get_all_records()
 
-    total_count = 0
-    total_salary = 0
+    stats = {}
+    total_sum = 0
 
     for row in data:
         try:
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
-            if (
-                str(row["UserID"]) == user_id and
-                row_date.month == now.month and
-                row_date.year == now.year
-            ):
-                total_count += int(row["Кол-во"])
-                total_salary += int(row["ЗП"])
+            if row_date.month == now.month and row_date.year == now.year:
+                name = row["Имя"]
+                count = int(row["Кол-во"])
+
+                salary = count * PRICE  # считаем заново
+
+                stats[name] = stats.get(name, 0) + salary
+                total_sum += salary
 
         except:
             continue
 
-    await message.answer(
-        f"💰 За месяц:\n\n"
-        f"Изделий: {total_count}\n"
-        f"ЗП: {total_salary} ₽"
-    )
+    text = "📊 Выплаты за месяц:\n\n"
+
+    for name, money in stats.items():
+        text += f"{name} — {money} ₽\n"
+
+    text += f"\nИТОГО: {total_sum} ₽"
+
+    await message.answer(text)
 
 
 # --- ОБЩИЙ ОТЧЁТ ---
