@@ -39,7 +39,7 @@ user_daily_log = {}
 users = set()
 
 PRICE = 80  # начальная цена
-ADMIN_ID = 123456789  # ⚠️ ЗАМЕНИ НА СВОЙ ID
+ADMIN_ID = 8482392419
 
 
 # --- Старт ---
