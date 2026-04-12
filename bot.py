@@ -260,6 +260,20 @@ async def top_week(message: Message):
 
     await message.answer(text)
 
+    # Сортируем по количеству штук (по убыванию) и берём топ 10
+    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
+    top_10 = sorted_stats[:10]
+
+    text = "🏆 ТОП за неделю:\n\n"
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for idx, (name, count) in enumerate(top_10, 1):
+        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
+        text += f"{medal} {name} — {count} шт.\n"
+
+    await message.answer(text)
+
     # Сортируем по сумме (по убыванию) и берём топ 10
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
     top_10 = sorted_stats[:10]
