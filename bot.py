@@ -48,6 +48,53 @@ async def start(message: Message):
         "✂️ Напиши, сколько изделий ты изготовила сегодня.\n\n"
         "Пример: 25"
     )
+    
+@dp.message(F.text == "/month")
+async def my_month(message: Message):
+    user_name = message.from_user.full_name
+    current_month = datetime.now().strftime("%m.%Y")
+
+    data = sheet.get_all_records()
+
+    total_count = 0
+    total_salary = 0
+
+    for row in data:
+        if user_name == row["Имя"] and current_month in row["Дата"]:
+            total_count += int(row["Кол-во"])
+            total_salary += int(row["ЗП"])
+
+    await message.answer(
+        f"💰 За месяц:\n\n"
+        f"Изделий: {total_count}\n"
+        f"ЗП: {total_salary} ₽"
+    )
+    
+@dp.message(F.text == "/total")
+async def total_month(message: Message):
+    data = sheet.get_all_records()
+
+    current_month = datetime.now().strftime("%m.%Y")
+
+    stats = {}
+
+    for row in data:
+        if current_month in row["Дата"]:
+            name = row["Имя"]
+            salary = int(row["ЗП"])
+
+            stats[name] = stats.get(name, 0) + salary
+
+    text = "📊 Выплаты за месяц:\n\n"
+    total_sum = 0
+
+    for name, money in stats.items():
+        text += f"{name} — {money} ₽\n"
+        total_sum += money
+
+    text += f"\nИТОГО: {total_sum} ₽"
+
+    await message.answer(text)
 
 
 @dp.message(F.text)
