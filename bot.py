@@ -103,12 +103,22 @@ async def my_month(message: Message):
     total_count = 0
     total_salary = 0
 
+   @dp.message(F.text == "/month")
+async def my_month(message: Message):
+    username = message.from_user.username
+    now = datetime.now()
+
+    data = sheet.get_all_records()
+
+    total_count = 0
+    total_salary = 0
+
     for row in data:
         try:
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
             if (
-                row["Имя"] == user_name and
+                row["Username"] == username and
                 row_date.month == now.month and
                 row_date.year == now.year
             ):
@@ -123,7 +133,6 @@ async def my_month(message: Message):
         f"Изделий: {total_count}\n"
         f"ЗП: {total_salary} ₽"
     )
-
 
 # --- ОБЩИЙ ОТЧЁТ ---
 @dp.message(F.text == "/total")
