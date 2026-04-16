@@ -13,7 +13,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 API_TOKEN = os.getenv("API_TOKEN")
 
 if not API_TOKEN:
-    raise ValueError("API_TOKEN не найден в переменных окружения")
+    raise ValueError("API_TOKEN не найден")
 
 # --- Google Sheets ---
 SCOPE = [
@@ -24,59 +24,92 @@ SCOPE = [
 creds_raw = os.getenv("GOOGLE_CREDS")
 
 if creds_raw is None:
-    raise ValueError("GOOGLE_CREDS не найден в переменных окружения")
+    raise ValueError("GOOGLE_CREDS не найден")
 
 creds_dict = json.loads(creds_raw)
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, SCOPE)
 
 client = gspread.authorize(creds)
+
+# --- ОСНОВНАЯ ТАБЛИЦА ---
 sheet = client.open("Отчет").sheet1
+
+# --- ЛИСТ ПОЛЬЗОВАТЕЛЕЙ ---
+try:
+    users_sheet = client.open("Отчет").worksheet("Users")
+except:
+    users_sheet = client.open("Отчет").add_worksheet(title="Users", rows=1000, cols=2)
+    users_sheet.append_row(["UserID"])
 
 # --- Bot ---
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 # Constants
-PRICE = 80  # стартовая цена
+PRICE = 80
 ADMIN_ID = 8482392419
 REMINDER_TIME = time(18, 0)
+ACCESS_CODE = "2818"
 
-# State management
+# State
 user_daily_log: Dict[int, Dict] = {}
 users: Set[int] = set()
+
+
+# --- ПРОВЕРКА ВЕРИФИКАЦИИ ---
+def is_verified(user_id: int) -> bool:
+    try:
+        data = users_sheet.get_all_values()
+        return str(user_id) in [row[0] for row in data]
+    except:
+        return False
+
+
+# --- ДОБАВИТЬ ПОЛЬЗОВАТЕЛЯ ---
+def add_verified(user_id: int):
+    users_sheet.append_row([str(user_id)])
 
 
 # --- СТАРТ ---
 @dp.message(F.text == "/start")
 async def start(message: Message):
-    users.add(message.from_user.id)
-    await message.answer(
-        "👋 Привет!\n\n"
-        "✂️ Напиши, сколько изделий ты изготовила сегодня.\n"
-        "Пример: 25"
-    )
+    if is_verified(message.from_user.id):
+        await message.answer("👋 Привет! Введи количество изделий")
+    else:
+        await message.answer("🔐 Введи код доступа")
 
 
-# --- ID ---
-@dp.message(F.text == "/id")
-async def get_id(message: Message):
-    await message.answer(f"Твой ID: {message.from_user.id}")
+# --- ОБРАБОТКА КОДА ---
+@dp.message(F.text)
+async def verify_or_data(message: Message):
+    user_id = message.from_user.id
 
+    # если не верифицирован
+    if not is_verified(user_id):
+        if message.text == ACCESS_CODE:
+            add_verified(user_id)
+            users.add(user_id)
 
-# --- ЗАПИСЬ ---
-@dp.message(F.text & ~F.text.startswith("/"))
-async def save_data(message: Message):
+            await message.answer(
+                "✅ Доступ открыт!\n\nТеперь отправь количество изделий"
+            )
+        else:
+            await message.answer("❌ Неверный код")
+        return
+
+    # дальше обычная логика
+    if message.text.startswith("/"):
+        return
+
     if not message.text.isdigit():
         await message.answer("❌ Пиши только число")
         return
 
-    user_id = message.from_user.id
     users.add(user_id)
 
     count = int(message.text)
     today = datetime.now().strftime("%d.%m.%Y")
 
-    # Проверка на дублирование
     if user_id in user_daily_log and user_daily_log[user_id]["date"] == today:
         await message.answer("⚠️ Уже отправляла сегодня")
         return
@@ -91,63 +124,53 @@ async def save_data(message: Message):
 
     salary = count * PRICE
 
-    await message.answer(
-        f"✅ Принято: {count}\n💰 ЗП: {salary} ₽"
-    )
+    await message.answer(f"✅ Принято: {count}\n💰 ЗП: {salary} ₽")
 
     asyncio.create_task(
         write_to_sheet(today, name, username, user_id, count, salary)
     )
 
 
-async def write_to_sheet(date: str, name: str, username: str, user_id: int, count: int, salary: int):
-    """Асинхронно записывает данные в Google Sheets"""
-    try:
-        await asyncio.to_thread(
-            sheet.append_row,
-            [date, name, username, user_id, count, salary]
-        )
-    except Exception as e:
-        print(f"Ошибка при записи в Google Sheets: {e}")
+async def write_to_sheet(date, name, username, user_id, count, salary):
+    await asyncio.to_thread(
+        sheet.append_row,
+        [date, name, username, user_id, count, salary]
+    )
 
 
-# --- СМЕНА ЦЕНЫ ---
-@dp.message(F.text.startswith("/setprice"))
-async def set_price(message: Message):
-    global PRICE
-
+# --- TOTAL (ТОЛЬКО ДЛЯ ТЕБЯ) ---
+@dp.message(F.text == "/total")
+async def total_month(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ Нет доступа")
         return
 
-    parts = message.text.split()
+    now = datetime.now()
+    data = await asyncio.to_thread(sheet.get_all_records)
 
-    if len(parts) != 2 or not parts[1].isdigit():
-        await message.answer("❌ Используй: /setprice 80")
-        return
+    total_sum = 0
 
-    new_price = int(parts[1])
-    if new_price <= 0:
-        await message.answer("❌ Цена должна быть больше 0")
-        return
+    for row in data:
+        try:
+            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
-    PRICE = new_price
-    await message.answer(f"✅ Новая цена: {PRICE} ₽")
+            if row_date.month == now.month and row_date.year == now.year:
+                total_sum += int(row["ЗП"])
+
+        except:
+            continue
+
+    await message.answer(f"💰 Общая ЗП за месяц: {total_sum} ₽")
 
 
-# --- МОЙ МЕСЯЦ ---
+# --- МЕСЯЦ ---
 @dp.message(F.text == "/month")
 async def my_month(message: Message):
     user_id = str(message.from_user.id)
     now = datetime.now()
 
-    try:
-        data = await asyncio.to_thread(sheet.get_all_records)
-    except Exception as e:
-        await message.answer(f"❌ Ошибка при чтении данных: {e}")
-        return
+    data = await asyncio.to_thread(sheet.get_all_records)
 
-    total_count = 0
     total_salary = 0
 
     for row in data:
@@ -159,107 +182,16 @@ async def my_month(message: Message):
                 row_date.month == now.month and
                 row_date.year == now.year
             ):
-                count = int(row["Кол-во"])
-                total_count += count
-                total_salary += count * PRICE
+                total_salary += int(row["ЗП"])
 
-        except (ValueError, KeyError):
+        except:
             continue
 
-    await message.answer(
-        f"💰 За месяц:\n\n"
-        f"Изделий: {total_count}\n"
-        f"ЗП: {total_salary} ₽"
-    )
-
-
-# --- ОБЩИЙ ОТЧЁТ ---
-@dp.message(F.text == "/total")
-async def total_month(message: Message):
-    now = datetime.now()
-
-    try:
-        data = await asyncio.to_thread(sheet.get_all_records)
-    except Exception as e:
-        await message.answer(f"❌ Ошибка при чтении данных: {e}")
-        return
-
-    stats: Dict[str, int] = {}
-    total_sum = 0
-
-    for row in data:
-        try:
-            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
-
-            if row_date.month == now.month and row_date.year == now.year:
-                name = row["Имя"]
-                count = int(row["Кол-во"])
-                salary = count * PRICE
-
-                stats[name] = stats.get(name, 0) + salary
-                total_sum += salary
-
-        except (ValueError, KeyError):
-            continue
-
-    if not stats:
-        await message.answer("📊 Нет данных за текущий месяц")
-        return
-
-    text = "📊 Выплаты за месяц:\n\n"
-    for name, money in sorted(stats.items()):
-        text += f"{name} — {money} ₽\n"
-
-    text += f"\nИТОГО: {total_sum} ₽"
-    await message.answer(text)
-
-
-# --- ТАБЛИЦА ЛИДЕРОВ ЗА НЕДЕЛЮ ---
-@dp.message(F.text == "/top")
-async def top_week(message: Message):
-    now = datetime.now()
-    week_ago = now - timedelta(days=7)
-
-    try:
-        data = await asyncio.to_thread(sheet.get_all_records)
-    except Exception as e:
-        await message.answer(f"❌ Ошибка при чтении данных: {e}")
-        return
-
-    stats: Dict[str, int] = {}
-
-    for row in data:
-        try:
-            row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
-
-            if week_ago <= row_date <= now:
-                name = row["Имя"]
-                count = int(row["Кол-во"])
-                stats[name] = stats.get(name, 0) + count
-
-        except (ValueError, KeyError):
-            continue
-
-    if not stats:
-        await message.answer("📊 Нет данных за последнюю неделю")
-        return
-
-    sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
-    top_10 = sorted_stats[:10]
-
-    text = "🏆 ТОП за неделю:\n\n"
-    medals = ["🥇", "🥈", "🥉"]
-
-    for idx, (name, count) in enumerate(top_10, 1):
-        medal = medals[idx - 1] if idx <= 3 else f"{idx}."
-        text += f"{medal} {name} — {count} шт.\n"
-
-    await message.answer(text)
+    await message.answer(f"💰 Твоя ЗП за месяц: {total_salary} ₽")
 
 
 # --- НАПОМИНАНИЕ ---
-async def wait_until(target_time: time) -> None:
-    """Ожидает наступления определённого времени суток"""
+async def wait_until(target_time: time):
     while True:
         now = datetime.now()
         target = datetime.combine(now.date(), target_time)
@@ -267,21 +199,19 @@ async def wait_until(target_time: time) -> None:
         if now >= target:
             target = target.replace(day=now.day + 1)
 
-        delay = (target - now).total_seconds()
-        await asyncio.sleep(delay)
+        await asyncio.sleep((target - now).total_seconds())
         return
 
 
 async def reminder_loop():
-    """Отправляет напоминания пользователям"""
     while True:
         await wait_until(REMINDER_TIME)
 
         for user_id in users:
             try:
                 await bot.send_message(user_id, "⏰ Сдайте отчёт за сегодня")
-            except Exception as e:
-                print(f"Ошибка при отправке напоминания пользователю {user_id}: {e}")
+            except:
+                pass
 
 
 # --- ЗАПУСК ---
