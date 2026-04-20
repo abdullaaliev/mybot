@@ -33,7 +33,7 @@ client = gspread.authorize(creds)
 spreadsheet = client.open("Отчет")
 sheet = spreadsheet.sheet1
 
-# --- Users sheet (верификация) ---
+# --- Users (верификация) ---
 try:
     users_sheet = spreadsheet.worksheet("Users")
 except:
@@ -59,11 +59,8 @@ users: Set[int] = set()
 # 🔐 ВЕРИФИКАЦИЯ
 # =========================
 def is_verified(user_id: int) -> bool:
-    try:
-        data = users_sheet.get_all_values()
-        return str(user_id) in [row[0] for row in data]
-    except:
-        return False
+    data = users_sheet.get_all_values()
+    return str(user_id) in [row[0] for row in data]
 
 
 def add_verified(user_id: int):
@@ -71,7 +68,7 @@ def add_verified(user_id: int):
 
 
 # =========================
-# 🚀 СТАРТ
+# 🚀 START
 # =========================
 @dp.message(F.text == "/start")
 async def start(message: Message):
@@ -82,21 +79,13 @@ async def start(message: Message):
 
 
 # =========================
-# 📌 ID
-# =========================
-@dp.message(F.text == "/id")
-async def get_id(message: Message):
-    await message.answer(f"Твой ID: {message.from_user.id}")
-
-
-# =========================
-# 🔐 ВВОД КОДА И ДАННЫХ
+# 🔐 ВВОД КОДА / ДАННЫХ
 # =========================
 @dp.message(F.text & ~F.text.startswith("/"))
 async def handle_input(message: Message):
     user_id = message.from_user.id
 
-    # --- НЕ ВЕРИФИЦИРОВАН ---
+    # не верифицирован
     if not is_verified(user_id):
         if message.text == ACCESS_CODE:
             add_verified(user_id)
@@ -106,7 +95,7 @@ async def handle_input(message: Message):
             await message.answer("🔐 Введи код доступа")
         return
 
-    # --- ОБРАБОТКА ЧИСЕЛ ---
+    # обработка числа
     if not message.text.isdigit():
         await message.answer("❌ Пиши только число")
         return
@@ -131,7 +120,7 @@ async def handle_input(message: Message):
 
     await asyncio.to_thread(
         sheet.append_row,
-        [today, name, username, user_id, count, salary]
+        [today, name, username, user_id, count, salary, ""]
     )
 
 
@@ -174,7 +163,7 @@ async def my_month(message: Message):
 
 
 # =========================
-# 📊 ОБЩИЙ ОТЧЁТ
+# 📊 TOTAL (месяц)
 # =========================
 @dp.message(F.text == "/total")
 async def total_month(message: Message):
@@ -185,32 +174,59 @@ async def total_month(message: Message):
     now = datetime.now()
     data = await asyncio.to_thread(sheet.get_all_records)
 
-    stats = {}
     total_sum = 0
+    paid_sum = 0
+    unpaid_sum = 0
 
     for row in data:
         try:
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
             if row_date.month == now.month and row_date.year == now.year:
-                name = row["Имя"]
                 salary = int(row["ЗП"])
-
-                stats[name] = stats.get(name, 0) + salary
                 total_sum += salary
+
+                if row.get("Оплачено", "") == "Да":
+                    paid_sum += salary
+                else:
+                    unpaid_sum += salary
         except:
             continue
 
-    text = "📊 Выплаты за месяц:\n\n"
-    for name, money in stats.items():
-        text += f"{name} — {money} ₽\n"
-
-    text += f"\nИТОГО: {total_sum} ₽"
-    await message.answer(text)
+    await message.answer(
+        f"📊 За месяц:\n\n"
+        f"💰 Всего: {total_sum} ₽\n"
+        f"✅ Выплачено: {paid_sum} ₽\n"
+        f"❗ Долг: {unpaid_sum} ₽"
+    )
 
 
 # =========================
-# 🏆 ТОП НЕДЕЛИ
+# 💸 PAYED (отметка)
+# =========================
+@dp.message(F.text == "/payed")
+async def mark_payed(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Нет доступа")
+        return
+
+    data = await asyncio.to_thread(sheet.get_all_records)
+
+    updated = 0
+
+    for i, row in enumerate(data, start=2):
+        try:
+            if row.get("Оплачено", "") != "Да":
+                await asyncio.to_thread(sheet.update_cell, i, 7, "Да")
+                updated += 1
+        except:
+            continue
+
+    await message.answer(f"✅ Отмечено оплачено: {updated} записей")
+
+
+# =========================
+# 🏆 ТОП
 # =========================
 @dp.message(F.text == "/top")
 async def top_week(message: Message):
@@ -238,7 +254,7 @@ async def top_week(message: Message):
 
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
 
-    text = "🏆 ТОП за неделю:\n\n"
+    text = "🏆 ТОП недели:\n\n"
     for i, (name, count) in enumerate(sorted_stats[:10], 1):
         text += f"{i}. {name} — {count}\n"
 
@@ -272,7 +288,7 @@ async def reminder_loop():
 
 
 # =========================
-# 🚀 ЗАПУСК
+# 🚀 START
 # =========================
 async def main():
     print("Бот запущен 🚀")
