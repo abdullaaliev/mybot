@@ -85,7 +85,7 @@ async def start(message: Message):
 async def handle_input(message: Message):
     user_id = message.from_user.id
 
-    # не верифицирован
+    # --- ВЕРИФИКАЦИЯ ---
     if not is_verified(user_id):
         if message.text == ACCESS_CODE:
             add_verified(user_id)
@@ -95,7 +95,7 @@ async def handle_input(message: Message):
             await message.answer("🔐 Введи код доступа")
         return
 
-    # обработка числа
+    # --- ЧИСЛА ---
     if not message.text.isdigit():
         await message.answer("❌ Пиши только число")
         return
@@ -202,7 +202,7 @@ async def total_month(message: Message):
 
 
 # =========================
-# 💸 PAYED (отметка)
+# 💸 PAYED
 # =========================
 @dp.message(F.text == "/payed")
 async def mark_payed(message: Message):
@@ -226,7 +226,7 @@ async def mark_payed(message: Message):
 
 
 # =========================
-# 🏆 ТОП
+# 🏆 ТОП (с понедельника)
 # =========================
 @dp.message(F.text == "/top")
 async def top_week(message: Message):
@@ -235,7 +235,9 @@ async def top_week(message: Message):
         return
 
     now = datetime.now()
-    week_ago = now - timedelta(days=7)
+
+    week_start = now - timedelta(days=now.weekday())
+    week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
 
     data = await asyncio.to_thread(sheet.get_all_records)
 
@@ -245,7 +247,7 @@ async def top_week(message: Message):
         try:
             row_date = datetime.strptime(row["Дата"], "%d.%m.%Y")
 
-            if week_ago <= row_date <= now:
+            if week_start <= row_date <= now:
                 name = row["Имя"]
                 count = int(row["Кол-во"])
                 stats[name] = stats.get(name, 0) + count
@@ -254,9 +256,10 @@ async def top_week(message: Message):
 
     sorted_stats = sorted(stats.items(), key=lambda x: x[1], reverse=True)
 
-    text = "🏆 ТОП недели:\n\n"
+    text = "🏆 ТОП за неделю (с понедельника):\n\n"
+
     for i, (name, count) in enumerate(sorted_stats[:10], 1):
-        text += f"{i}. {name} — {count}\n"
+        text += f"{i}. {name} — {count} шт.\n"
 
     await message.answer(text)
 
