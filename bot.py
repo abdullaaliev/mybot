@@ -45,7 +45,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
 # --- CONFIG ---
-PRICE = 80
+PRICE = 70
 ADMIN_ID = 8482392419
 ACCESS_CODE = "2818"
 REMINDER_TIME = time(18, 0)
